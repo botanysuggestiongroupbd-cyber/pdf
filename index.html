@@ -241,7 +241,7 @@
             <p>বোটানি সাজেশন গ্রুপ বাংলাদেশ - বিশেষ নির্বাচন</p>
             <div style="margin-top: 10px;">
                 <span class="status-indicator status-online" id="status-indicator"></span>
-                <span id="connection-status">Firebase Connected</span>
+                <span id="connection-status">Connected</span>
             </div>
         </div>
 
@@ -253,13 +253,13 @@
             </div>
             <div class="stat-card">
                 <div>মোট প্রার্থী</div>
-                <div class="stat-number">39</div>
+                <div class="stat-number">40</div>
                 <div>জন</div>
             </div>
             <div class="stat-card winner" id="winner-card">
                 <div>🏆 বর্তমান বিজয়ী</div>
                 <div class="stat-number" id="winner-name">-</div>
-                <div id="winner-votes">0 ভোট</div>
+                <div id="winner-votes">__ ভোট</div>
             </div>
             <div class="stat-card">
                 <div>ফলাফল স্ট্যাটাস</div>
@@ -379,7 +379,8 @@
             { id: 36, name: "Md Sujon Shikder", marker: "🌽", color: "#607d8b" },
             { id: 37, name: "Sadek Mia", marker: "🍉", color: "#f44336" },
             { id: 38, name: "Md Rana Ahmed", marker: "🍄", color: "#4caf50" },
-            { id: 39, name: "Md Saidul Haque", marker: "🥭", color: "#2196f3" }
+            { id: 39, name: "Md Saidul Haque", marker: "🥭", color: "#2196f3" },
+            { id: 40, name: "A M Billah", marker: "🤣", color: "#2196f3" }
     ];
 
     const settingsDoc = doc(db, "settings", "election");
