@@ -79,16 +79,20 @@
             justify-content: center;
             transition: all 0.3s ease;
         }
-        .btn:hover {
+        .btn:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
         .btn-primary { background: #3498db; color: white; }
         .btn-success { background: #27ae60; color: white; }
         .btn-danger { background: #e74c3c; color: white; }
         .btn-warning { background: #f39c12; color: white; }
         .btn-info { background: #17a2b8; color: white; }
-        .btn-secondary { background: #95a5a6; color: white; cursor: not-allowed; opacity: 0.6; }
+        .btn-secondary { background: #95a5a6; color: white; }
         .tabs {
             display: flex;
             background: #34495e;
@@ -188,6 +192,9 @@
             transform: translateX(5px);
             box-shadow: 0 4px 10px rgba(0,0,0,0.15);
         }
+        .voter-item.voted {
+            border-left-color: #27ae60;
+        }
         .message-box {
             background: #fff3cd;
             border: 1px solid #ffeaa7;
@@ -239,6 +246,21 @@
             text-align: center;
             color: #2980b9;
             font-size: 0.9em;
+        }
+        .voter-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            margin-left: 8px;
+        }
+        .badge-first {
+            background: #3498db;
+            color: white;
+        }
+        .badge-second {
+            background: #27ae60;
+            color: white;
         }
     </style>
 </head>
@@ -294,7 +316,7 @@
         </div>
 
         <div class="export-note" id="exportNote" style="display: none;">
-            ✅ ফলাফল প্রকাশিত হয়েছে। এখন CSV ডাউনলোড করতে পারবেন।
+            ✅ ফলাফল প্রকাশিত হয়েছে। এখন CSV ডাউনলোড করতে পারবেন। CSV তে দেখা যাবে কে কাকে ভোট দিয়েছে।
         </div>
 
         <div class="tabs">
@@ -486,7 +508,7 @@
             const settingsInfo = document.getElementById('settings-info');
 
             if (resultsPublished) {
-                messageBox.innerHTML = '<h3>✅ ফলাফল প্রকাশিত হয়েছে</h3><p>এখন সবাই ফলাফল দেখতে পারবে এবং CSV ডাউনলোড করতে পারবেন।</p>';
+                messageBox.innerHTML = '<h3>✅ ফলাফল প্রকাশিত হয়েছে</h3><p>এখন সবাই ফলাফল দেখতে পারবে এবং CSV ডাউনলোড করতে পারবেন। CSV তে দেখা যাবে কে কাকে ভোট দিয়েছে।</p>';
                 messageBox.style.background = '#d4edda';
                 messageBox.style.borderColor = '#c3e6cb';
                 messageBox.style.color = '#155724';
@@ -522,7 +544,7 @@
                 updateExportButtons();
                 
                 const message = resultsPublished ? 
-                    '✅ ফলাফল প্রকাশিত হয়েছে! এখন CSV ডাউনলোড করতে পারবেন' : 
+                    '✅ ফলাফল প্রকাশিত হয়েছে! এখন CSV ডাউনলোড করতে পারবেন (কে কাকে ভোট দিয়েছে)' : 
                     '🔒 ফলাফল গোপন করা হয়েছে! CSV ডাউনলোড বন্ধ করা হয়েছে';
                 
                 showNotification(message, "success");
@@ -578,7 +600,7 @@
             }
         }
 
-        // Export voter details to CSV (only when results published)
+        // Export voter details to CSV (with who voted whom - only when results published)
         window.exportVoterDetails = async function() {
             if (!resultsPublished) {
                 showNotification('❌ ফলাফল প্রকাশিত না হওয়া পর্যন্ত CSV ডাউনলোড করা যাবে না!', 'warning');
@@ -598,17 +620,26 @@
                     return;
                 }
 
-                let csv = 'ক্রমিক,ভোটারের নাম,ভোটের সময়\n';
+                // CSV Header with who voted whom
+                let csv = 'ক্রমিক,ভোটারের নাম,ভোটের সময়,১ম পছন্দ (প্রার্থী),১ম পছন্দের মার্কা,২য় পছন্দ (প্রার্থী),২য় পছন্দের মার্কা\n';
                 
                 const sortedVotes = votes.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
                 
                 sortedVotes.forEach((vote, index) => {
                     const time = new Date(vote.timestamp).toLocaleString('bn-BD');
                     
+                    // Find candidate markers
+                    const candidate1 = candidates.find(c => c.name === vote.candidate1);
+                    const candidate2 = candidates.find(c => c.name === vote.candidate2);
+                    
                     const row = [
                         index + 1,
                         `"${vote.voterName || 'Anonymous'}"`,
-                        `"${time}"`
+                        `"${time}"`,
+                        `"${vote.candidate1 || ''}"`,
+                        `"${candidate1?.marker || ''}"`,
+                        `"${vote.candidate2 || ''}"`,
+                        `"${candidate2?.marker || ''}"`
                     ].join(',');
                     csv += row + '\n';
                 });
@@ -617,13 +648,13 @@
                 const link = document.createElement('a');
                 const url = URL.createObjectURL(blob);
                 link.setAttribute('href', url);
-                link.setAttribute('download', `voter_list_${new Date().toISOString().split('T')[0]}.csv`);
+                link.setAttribute('download', `voter_details_with_choices_${new Date().toISOString().split('T')[0]}.csv`);
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
                 URL.revokeObjectURL(url);
                 
-                showNotification(`✅ ${votes.length} টি ভোটারের তালিকা ডাউনলোড হয়েছে!`, "success");
+                showNotification(`✅ ${votes.length} টি ভোটের ডিটেইলস ডাউনলোড হয়েছে! (কে কাকে ভোট দিয়েছে)`, "success");
             } catch (error) {
                 showNotification('❌ এক্সপোর্ট সমস্যা: ' + error.message, "error");
             }
@@ -680,7 +711,7 @@
             }
         }
 
-        // Display voters list (only names and time)
+        // Display voters list (showing who they voted for in UI)
         function displayVotersList(votes) {
             const container = document.getElementById('voters-container');
             const sortedVotes = votes.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
@@ -692,12 +723,27 @@
             
             container.innerHTML = sortedVotes.map(vote => {
                 const time = new Date(vote.timestamp).toLocaleString('bn-BD');
+                
+                // Find candidate markers
+                const candidate1 = candidates.find(c => c.name === vote.candidate1);
+                const candidate2 = candidates.find(c => c.name === vote.candidate2);
+                
                 return `
-                    <div class="voter-item">
-                        <div>
-                            <div style="font-weight: bold; color: #2c3e50;">${vote.voterName || 'Anonymous'}</div>
+                    <div class="voter-item ${resultsPublished ? 'voted' : ''}">
+                        <div style="flex: 1;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                                <span style="font-weight: bold; color: #2c3e50;">${vote.voterName || 'Anonymous'}</span>
+                            </div>
+                            ${resultsPublished ? `
+                                <div style="display: flex; gap: 15px; margin-top: 8px;">
+                                    <div><span style="color: #3498db;">🎯 ১ম:</span> ${vote.candidate1 || 'নেই'} ${candidate1?.marker || ''}</div>
+                                    <div><span style="color: #27ae60;">⭐ ২য়:</span> ${vote.candidate2 || 'নেই'} ${candidate2?.marker || ''}</div>
+                                </div>
+                            ` : ''}
                         </div>
-                        <div style="color: #95a5a6; font-size: 0.8em;">${time}</div>
+                        <div style="color: #95a5a6; font-size: 0.8em; text-align: right;">
+                            <div>${time}</div>
+                        </div>
                     </div>
                 `;
             }).join('');
