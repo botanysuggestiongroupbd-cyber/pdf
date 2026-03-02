@@ -224,9 +224,69 @@
         }
         .notification.success { background: #27ae60; }
         .notification.error { background: #e74c3c; }
+        .notification.info { background: #3498db; }
         @keyframes slideIn {
             from { transform: translateX(100%); opacity: 0; }
             to { transform: translateX(0); opacity: 1; }
+        }
+        .detail-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin: 10px 0;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            border-left: 5px solid #9b59b6;
+        }
+        .voter-name {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .vote-choices {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .choice-box {
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .first-choice {
+            background: #e8f4f8;
+            border: 1px solid #3498db;
+        }
+        .second-choice {
+            background: #f0f8e8;
+            border: 1px solid #27ae60;
+        }
+        .choice-label {
+            font-size: 0.9em;
+            color: #7f8c8d;
+            margin-bottom: 5px;
+        }
+        .candidate-name-large {
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .marker-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 15px;
+            background: white;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+        .timestamp {
+            text-align: right;
+            color: #95a5a6;
+            font-size: 0.8em;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px dashed #eee;
         }
     </style>
 </head>
@@ -253,7 +313,7 @@
             </div>
             <div class="stat-card">
                 <div>মোট প্রার্থী</div>
-                <div class="stat-number">40</div>
+                <div class="stat-number">43</div>
                 <div>জন</div>
             </div>
             <div class="stat-card winner" id="winner-card">
@@ -270,9 +330,10 @@
 
         <div class="controls">
             <button class="btn btn-primary" onclick="loadResults()">🔄 রিফ্রেশ</button>
-            <button class="btn btn-success" onclick="exportToExcel()">📊 এক্সেল</button>
-            <button class="btn btn-info" onclick="toggleResultsPublish()" id="publish-btn">📢 ফলাফল প্রকাশ</button>
-            <button class="btn btn-danger" >🗑️ সব ভোট ডিলেট</button>
+            <button class="btn btn-success" onclick="exportToExcel()">📊 ফলাফল এক্সেল</button>
+            <button class="btn btn-info" onclick="exportVoterDetails()">📋 ভোটার ডিটেইলস</button>
+            <button class="btn btn-warning" onclick="toggleResultsPublish()" id="publish-btn">📢 ফলাফল প্রকাশ</button>
+            <button class="btn btn-danger" onclick="resetAllVotes()">🗑️ সব ভোট ডিলেট</button>
         </div>
 
         <div class="message-box" id="message-box">
@@ -281,13 +342,24 @@
         </div>
 
         <div class="tabs">
-            <button class="tab active" onclick="showTab('voters-tab')">👥 ভোটার তালিকা</button>
-            <button class="tab" onclick="showTab('results-tab')">📊 ফলাফল</button>
+            <button class="tab active" onclick="showTab('voters-tab', event)">👥 ভোটার তালিকা</button>
+            <button class="tab" onclick="showTab('voters-details-tab', event)">📋 ভোটার ডিটেইলস</button>
+            <button class="tab" onclick="showTab('results-tab', event)">📊 ফলাফল</button>
         </div>
 
         <div id="voters-tab" class="tab-content active">
             <h2>ভোটারদের তালিকা</h2>
             <div class="voters-list" id="voters-container">
+                <div class="loading">লোড হচ্ছে...</div>
+            </div>
+        </div>
+
+        <div id="voters-details-tab" class="tab-content">
+            <h2>ভোটারদের বিস্তারিত তথ্য</h2>
+            <div style="margin-bottom: 15px; text-align: right;">
+                <button class="btn btn-success" onclick="exportVoterDetails()" style="display: inline-block; width: auto; padding: 8px 15px;">📥 CSV ডাউনলোড</button>
+            </div>
+            <div class="voters-list" id="voters-details-container">
                 <div class="loading">লোড হচ্ছে...</div>
             </div>
         </div>
@@ -300,47 +372,37 @@
         </div>
     </div>
 
- <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { 
-        getFirestore, 
-        collection, 
-        getDocs, 
-        deleteDoc, 
-        doc, 
-        setDoc, 
-        getDoc, 
-        writeBatch,
-        onSnapshot 
-    } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { 
+            getFirestore, 
+            collection, 
+            getDocs, 
+            deleteDoc, 
+            doc, 
+            setDoc, 
+            getDoc, 
+            writeBatch,
+            onSnapshot 
+        } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-    const firebaseConfig = {
-        apiKey: "AIzaSyChDeqEPatoWTUPoZpcYOSXcnAuoVJsV-c",
-        authDomain: "apps-login-page.firebaseapp.com",
-        projectId: "apps-login-page",
-        storageBucket: "apps-login-page.firebasestorage.app",
-        messagingSenderId: "601656721972",
-        appId: "1:601656721972:web:20ce6efffc82b2e0b68061",
-        measurementId: "G-RPPBB0C7BQ"
-    };
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyChDeqEPatoWTUPoZpcYOSXcnAuoVJsV-c",
+            authDomain: "apps-login-page.firebaseapp.com",
+            projectId: "apps-login-page",
+            storageBucket: "apps-login-page.firebasestorage.app",
+            messagingSenderId: "601656721972",
+            appId: "1:601656721972:web:20ce6efffc82b2e0b68061",
+            measurementId: "G-RPPBB0C7BQ"
+        };
 
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
 
-    // Notification function
-    function showNotification(message, type = 'success') {
-        const notification = document.getElementById('notification');
-        notification.textContent = message;
-        notification.className = `notification ${type}`;
-        notification.style.display = 'block';
-        
-        setTimeout(() => {
-            notification.style.display = 'none';
-        }, 3000);
-    }
-
-    // প্রার্থীদের লিস্ট
-    const candidates = [
+        // প্রার্থীদের লিস্ট
+        const candidates = [
             { id: 1, name: "Kazi Nazmul Hasan", marker: "⚽", color: "#e74c3c" },
             { id: 2, name: "Joni Islam", marker: "🚀", color: "#3498db" },
             { id: 3, name: "Amio Biswas", marker: "🌳", color: "#2ecc71" },
@@ -384,417 +446,512 @@
             { id: 41, name: "Md Sabbir Ahmed Tawhid", marker: "🥒", color: "#2196f3" },
             { id: 42, name: "Md Asraf Hossain", marker: "🎍", color: "#2196f3" },
             { id: 43, name: "Aoual Sheikh", marker: "🍞", color: "#2196f3" }
-    ];
+        ];
 
-    const settingsDoc = doc(db, "settings", "election");
-    let resultsPublished = false;
-    let unsubscribeVotes = null;
-    let isConnected = false;
-    let currentVotes = [];
+        // Global Variables
+        const settingsDoc = doc(db, "settings", "election");
+        let resultsPublished = false;
+        let unsubscribeVotes = null;
+        let currentVotes = [];
 
-    // Firebase connection status check
-    function updateConnectionStatus(connected) {
-        isConnected = connected;
-        const indicator = document.getElementById('status-indicator');
-        const statusText = document.getElementById('connection-status');
-        
-        if (connected) {
-            indicator.className = 'status-indicator status-online';
-            statusText.textContent = 'Firebase Connected';
-            statusText.style.color = '#27ae60';
-        } else {
-            indicator.className = 'status-indicator status-offline';
-            statusText.textContent = 'Firebase Disconnected';
-            statusText.style.color = '#e74c3c';
+        // Notification function
+        function showNotification(message, type = 'success') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = `notification ${type}`;
+            notification.style.display = 'block';
+            
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 3000);
         }
-    }
 
-    // প্রধান ফাংশনগুলো
-    async function loadInitialData() {
-        try {
-            console.log("Initializing admin panel...");
+        // Update connection status
+        function updateConnectionStatus(connected) {
+            const indicator = document.getElementById('status-indicator');
+            const statusText = document.getElementById('connection-status');
+            
+            if (connected) {
+                indicator.className = 'status-indicator status-online';
+                statusText.textContent = 'Firebase Connected';
+            } else {
+                indicator.className = 'status-indicator status-offline';
+                statusText.textContent = 'Firebase Disconnected';
+            }
+        }
+
+        // Check settings from Firebase
+        async function checkSettings() {
+            try {
+                const docSnap = await getDoc(settingsDoc);
+                
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    resultsPublished = data.resultsPublished || false;
+                } else {
+                    await setDoc(settingsDoc, { 
+                        resultsPublished: false,
+                        createdAt: new Date().toISOString()
+                    });
+                    resultsPublished = false;
+                }
+                updateUI();
+            } catch (error) {
+                console.error("Settings error:", error);
+                resultsPublished = false;
+                updateUI();
+            }
+        }
+
+        // Update UI based on resultsPublished status
+        function updateUI() {
+            const messageBox = document.getElementById('message-box');
+            const publishBtn = document.getElementById('publish-btn');
+            const resultsStatus = document.getElementById('results-status');
+            const settingsInfo = document.getElementById('settings-info');
+
+            if (resultsPublished) {
+                messageBox.innerHTML = '<h3>✅ ফলাফল প্রকাশিত হয়েছে</h3><p>এখন সবাই ফলাফল দেখতে পারবে।</p>';
+                messageBox.style.background = '#d4edda';
+                messageBox.style.borderColor = '#c3e6cb';
+                messageBox.style.color = '#155724';
+                publishBtn.textContent = '🙈 ফলাফল গোপন করুন';
+                resultsStatus.textContent = 'প্রকাশিত';
+                settingsInfo.textContent = 'ফলাফল প্রকাশিত';
+            } else {
+                messageBox.innerHTML = '<h3>🔒 ভোট গোপন রাখা হয়েছে</h3><p>ফলাফল প্রকাশ না করা পর্যন্ত কেউ ফলাফল দেখতে পারবে না।</p>';
+                messageBox.style.background = '#fff3cd';
+                messageBox.style.borderColor = '#ffeaa7';
+                messageBox.style.color = '#856404';
+                publishBtn.textContent = '📢 ফলাফল প্রকাশ করুন';
+                resultsStatus.textContent = 'গোপন';
+                settingsInfo.textContent = 'ফলাফল গোপন';
+            }
+        }
+
+        // Toggle results publish status
+        window.toggleResultsPublish = async function() {
+            try {
+                const newStatus = !resultsPublished;
+                const publishBtn = document.getElementById('publish-btn');
+                publishBtn.textContent = '⏳ প্রক্রিয়াকরণ...';
+                publishBtn.disabled = true;
+
+                await setDoc(settingsDoc, { 
+                    resultsPublished: newStatus,
+                    lastUpdated: new Date().toISOString()
+                }, { merge: true });
+                
+                resultsPublished = newStatus;
+                updateUI();
+                
+                const message = resultsPublished ? 
+                    '✅ ফলাফল প্রকাশিত হয়েছে!' : 
+                    '🔒 ফলাফল গোপন করা হয়েছে!';
+                
+                showNotification(message, "success");
+                await loadResults();
+                
+            } catch (error) {
+                showNotification('❌ সমস্যা: ' + error.message, "error");
+            } finally {
+                const publishBtn = document.getElementById('publish-btn');
+                publishBtn.disabled = false;
+                updateUI();
+            }
+        }
+
+        // Reset all votes (Delete all)
+        window.resetAllVotes = async function() {
+            if (!confirm('⚠️ সাবধান! আপনি কি সব ভোট ডিলেট করতে চান?')) {
+                return;
+            }
+
+            if (!confirm('❌ শেষ সতর্কতা! সব ভোট চিরতরে মুছে যাবে। আপনি কি নিশ্চিত?')) {
+                return;
+            }
+
+            const deleteBtn = event.target;
+            const originalText = deleteBtn.textContent;
+            deleteBtn.textContent = '⏳ ডিলেট হচ্ছে...';
+            deleteBtn.disabled = true;
+
+            try {
+                const querySnapshot = await getDocs(collection(db, "votes"));
+                const batch = writeBatch(db);
+                
+                let deleteCount = 0;
+                querySnapshot.forEach((doc) => {
+                    batch.delete(doc.ref);
+                    deleteCount++;
+                });
+                
+                if (deleteCount > 0) {
+                    await batch.commit();
+                    showNotification(`✅ ${deleteCount} টি ভোট ডিলেট হয়েছে!`, "success");
+                } else {
+                    showNotification('📝 কোন ভোট নেই!', "info");
+                }
+                
+                await loadResults();
+            } catch (error) {
+                showNotification('❌ সমস্যা: ' + error.message, "error");
+            } finally {
+                deleteBtn.textContent = originalText;
+                deleteBtn.disabled = false;
+            }
+        }
+
+        // Export voter details to CSV
+        window.exportVoterDetails = async function() {
+            try {
+                const querySnapshot = await getDocs(collection(db, "votes"));
+                const votes = [];
+                
+                querySnapshot.forEach((doc) => {
+                    votes.push({ id: doc.id, ...doc.data() });
+                });
+
+                if (votes.length === 0) {
+                    showNotification('📝 কোন ভোটের ডেটা নেই!', "info");
+                    return;
+                }
+
+                let csv = 'ক্রমিক,ভোটারের নাম,ভোটের সময়,১ম পছন্দ,১ম মার্কা,২য় পছন্দ,২য় মার্কা\n';
+                
+                const sortedVotes = votes.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                
+                sortedVotes.forEach((vote, index) => {
+                    const time = new Date(vote.timestamp).toLocaleString('bn-BD');
+                    const candidate1 = candidates.find(c => c.name === vote.candidate1);
+                    const candidate2 = candidates.find(c => c.name === vote.candidate2);
+                    
+                    const row = [
+                        index + 1,
+                        `"${vote.voterName || 'Anonymous'}"`,
+                        `"${time}"`,
+                        `"${vote.candidate1 || ''}"`,
+                        `"${candidate1?.marker || ''}"`,
+                        `"${vote.candidate2 || ''}"`,
+                        `"${candidate2?.marker || ''}"`
+                    ].join(',');
+                    csv += row + '\n';
+                });
+
+                const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', `voter_details_${new Date().toISOString().split('T')[0]}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                
+                showNotification(`✅ ${votes.length} টি ভোটের ডিটেইলস ডাউনলোড হয়েছে!`, "success");
+            } catch (error) {
+                showNotification('❌ এক্সপোর্ট সমস্যা: ' + error.message, "error");
+            }
+        }
+
+        // Export results to Excel/CSV
+        window.exportToExcel = async function() {
+            try {
+                const querySnapshot = await getDocs(collection(db, "votes"));
+                const votes = [];
+                
+                querySnapshot.forEach((doc) => {
+                    votes.push(doc.data());
+                });
+
+                const voteCount = {};
+                candidates.forEach(candidate => {
+                    voteCount[candidate.name] = 0;
+                });
+
+                votes.forEach(vote => {
+                    if (vote.candidate1) voteCount[vote.candidate1]++;
+                    if (vote.candidate2) voteCount[vote.candidate2]++;
+                });
+
+                let csv = 'ক্রমিক,প্রার্থীর নাম,মার্কা,ভোট সংখ্যা\n';
+                
+                let rank = 1;
+                Object.entries(voteCount)
+                    .sort(([,a], [,b]) => b - a)
+                    .forEach(([candidateName, count]) => {
+                        const candidate = candidates.find(c => c.name === candidateName);
+                        csv += `"${rank++}","${candidateName}","${candidate?.marker || ''}","${count}"\n`;
+                    });
+
+                const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', `election_results_${new Date().toISOString().split('T')[0]}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                
+                showNotification(`✅ ফলাফল ডাউনলোড হয়েছে!`, "success");
+            } catch (error) {
+                showNotification('❌ এক্সপোর্ট সমস্যা: ' + error.message, "error");
+            }
+        }
+
+        // Display voters list (simple)
+        function displayVotersList(votes) {
+            const container = document.getElementById('voters-container');
+            const sortedVotes = votes.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            
+            if (sortedVotes.length === 0) {
+                container.innerHTML = '<div class="message-box">📝 এখনও কোন ভোট দেওয়া হয়নি</div>';
+                return;
+            }
+            
+            container.innerHTML = sortedVotes.map(vote => {
+                const time = new Date(vote.timestamp).toLocaleString('bn-BD');
+                return `
+                    <div class="voter-item">
+                        <div>
+                            <div style="font-weight: bold; color: #2c3e50;">${vote.voterName || 'Anonymous'}</div>
+                            <div style="color: #7f8c8d; font-size: 0.9em;">ভোট দিয়েছেন</div>
+                        </div>
+                        <div style="color: #95a5a6; font-size: 0.8em;">${time}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Display voter details (detailed)
+        function displayVoterDetails(votes) {
+            const container = document.getElementById('voters-details-container');
+            const sortedVotes = votes.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            
+            if (sortedVotes.length === 0) {
+                container.innerHTML = '<div class="message-box">📝 এখনও কোন ভোট দেওয়া হয়নি</div>';
+                return;
+            }
+            
+            container.innerHTML = sortedVotes.map((vote, index) => {
+                const time = new Date(vote.timestamp).toLocaleString('bn-BD', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+                
+                const candidate1 = candidates.find(c => c.name === vote.candidate1);
+                const candidate2 = candidates.find(c => c.name === vote.candidate2);
+                
+                return `
+                    <div class="detail-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <span style="background: #3498db; color: white; padding: 5px 15px; border-radius: 20px; font-size: 0.9em;">#${index + 1}</span>
+                            <span style="color: #27ae60; font-weight: bold;">${vote.voterName || 'Anonymous'}</span>
+                        </div>
+                        
+                        <div class="vote-choices">
+                            <div class="choice-box first-choice">
+                                <div class="choice-label">🎯 প্রথম পছন্দ</div>
+                                <div class="candidate-name-large">${vote.candidate1 || 'নেই'}</div>
+                                <div class="marker-badge">মার্কা: ${candidate1?.marker || ''}</div>
+                            </div>
+                            <div class="choice-box second-choice">
+                                <div class="choice-label">⭐ দ্বিতীয় পছন্দ</div>
+                                <div class="candidate-name-large">${vote.candidate2 || 'নেই'}</div>
+                                <div class="marker-badge">মার্কা: ${candidate2?.marker || ''}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="timestamp">
+                            🕒 ভোট দেওয়ার সময়: ${time}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Display results
+        function displayResults(votes) {
+            const container = document.getElementById('results-container');
+            
+            if (!resultsPublished) {
+                container.innerHTML = '<div class="message-box">🔒 ফলাফল এখনও প্রকাশিত হয়নি</div>';
+                return;
+            }
+
+            const voteCount = {};
+            candidates.forEach(candidate => {
+                voteCount[candidate.name] = 0;
+            });
+
+            votes.forEach(vote => {
+                if (vote.candidate1) voteCount[vote.candidate1]++;
+                if (vote.candidate2) voteCount[vote.candidate2]++;
+            });
+
+            const sortedResults = Object.entries(voteCount)
+                .sort(([,a], [,b]) => b - a)
+                .filter(([,count]) => count > 0);
+
+            const maxVotes = Math.max(...Object.values(voteCount));
+            
+            if (sortedResults.length === 0) {
+                container.innerHTML = '<div class="message-box">📊 কোন ভোট পাওয়া যায়নি</div>';
+                return;
+            }
+            
+            container.innerHTML = sortedResults.map(([candidateName, count], index) => {
+                const candidate = candidates.find(c => c.name === candidateName);
+                const percentage = maxVotes > 0 ? ((count / maxVotes) * 100).toFixed(1) : 0;
+                const isWinner = index === 0 && count > 0;
+                
+                return `
+                    <div class="candidate-card ${isWinner ? 'winner' : ''}">
+                        <div class="candidate-header">
+                            <div class="candidate-marker" style="background: ${candidate?.color || '#666'}">
+                                ${candidate?.marker || '?'}
+                            </div>
+                            <div class="candidate-info">
+                                <div class="candidate-name">${candidateName}</div>
+                                <div style="color: #7f8c8d; font-size: 0.9em;">
+                                    মার্কা: ${candidate?.marker || 'N/A'} | ${percentage}%
+                                </div>
+                            </div>
+                            <div class="vote-count">${count}</div>
+                        </div>
+                        ${isWinner ? '<div style="text-align: center; color: #27ae60; font-weight: bold; margin-top: 10px;">🏆 বর্তমান বিজয়ী</div>' : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Update statistics
+        function updateStatistics(votes) {
+            document.getElementById('total-votes').textContent = votes.length;
+
+            if (resultsPublished && votes.length > 0) {
+                const voteCount = {};
+                candidates.forEach(candidate => {
+                    voteCount[candidate.name] = 0;
+                });
+
+                votes.forEach(vote => {
+                    if (vote.candidate1) voteCount[vote.candidate1]++;
+                    if (vote.candidate2) voteCount[vote.candidate2]++;
+                });
+
+                const sortedResults = Object.entries(voteCount).sort(([,a], [,b]) => b - a);
+                const winner = sortedResults[0];
+                
+                document.getElementById('winner-name').textContent = winner[0];
+                document.getElementById('winner-votes').textContent = winner[1] + ' ভোট';
+            } else {
+                document.getElementById('winner-name').textContent = '-';
+                document.getElementById('winner-votes').textContent = '0 ভোট';
+            }
+        }
+
+        // Load all results
+        window.loadResults = async function() {
+            try {
+                const querySnapshot = await getDocs(collection(db, "votes"));
+                currentVotes = [];
+                
+                querySnapshot.forEach((doc) => {
+                    currentVotes.push({ id: doc.id, ...doc.data() });
+                });
+
+                updateStatistics(currentVotes);
+                displayVotersList(currentVotes);
+                displayVoterDetails(currentVotes);
+                
+                if (resultsPublished) {
+                    displayResults(currentVotes);
+                } else {
+                    document.getElementById('results-container').innerHTML = 
+                        '<div class="message-box">🔒 ফলাফল এখনও প্রকাশিত হয়নি</div>';
+                }
+                
+                updateConnectionStatus(true);
+                
+            } catch (error) {
+                document.getElementById('voters-container').innerHTML = 
+                    '<div class="message-box">❌ ডেটা লোড করতে সমস্যা: ' + error.message + '</div>';
+                document.getElementById('voters-details-container').innerHTML = 
+                    '<div class="message-box">❌ ডেটা লোড করতে সমস্যা: ' + error.message + '</div>';
+                document.getElementById('results-container').innerHTML = 
+                    '<div class="message-box">❌ ফলাফল লোড করতে সমস্যা: ' + error.message + '</div>';
+                updateConnectionStatus(false);
+            }
+        }
+
+        // Show tab function
+        window.showTab = function(tabName, event) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            document.getElementById(tabName).classList.add('active');
+            
+            if (event && event.target) {
+                event.target.classList.add('active');
+            }
+            
+            if (tabName === 'results-tab' || tabName === 'voters-details-tab') {
+                loadResults();
+            }
+        }
+
+        // Setup realtime listeners
+        function setupRealtimeListener() {
+            if (unsubscribeVotes) {
+                unsubscribeVotes();
+            }
+            
+            unsubscribeVotes = onSnapshot(collection(db, "votes"), () => {
+                loadResults();
+                updateConnectionStatus(true);
+            }, () => {
+                updateConnectionStatus(false);
+            });
+
+            onSnapshot(settingsDoc, (doc) => {
+                if (doc.exists()) {
+                    const data = doc.data();
+                    resultsPublished = data.resultsPublished || false;
+                    updateUI();
+                    loadResults();
+                }
+            });
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', async function() {
             await checkSettings();
             await loadResults();
             setupRealtimeListener();
-            updateConnectionStatus(true);
-            showNotification("এডমিন প্যানেল সফলভাবে লোড হয়েছে", "success");
-        } catch (error) {
-            console.error("Initialization error:", error);
-            updateConnectionStatus(false);
-            showNotification("এডমিন প্যানেল লোড করতে সমস্যা: " + error.message, "error");
-        }
-    }
-
-    async function checkSettings() {
-        try {
-            console.log("Checking settings...");
-            const docSnap = await getDoc(settingsDoc);
             
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                resultsPublished = data.resultsPublished || false;
-                console.log("Settings found, resultsPublished:", resultsPublished);
-            } else {
-                console.log("No settings found, creating default...");
-                await setDoc(settingsDoc, { 
-                    resultsPublished: false,
-                    createdAt: new Date().toISOString(),
-                    lastUpdated: new Date().toISOString(),
-                    totalCandidates: 39,
-                    autoCreated: true
-                });
-                resultsPublished = false;
-            }
-            updateUI();
-        } catch (error) {
-            console.error("Settings error:", error);
-            resultsPublished = false;
-            updateUI();
-        }
-    }
-
-    window.toggleResultsPublish = async function() {
-        try {
-            const newStatus = !resultsPublished;
-            console.log("Toggling results publish to:", newStatus);
-            
-            const publishBtn = document.getElementById('publish-btn');
-            publishBtn.textContent = '⏳ প্রক্রিয়াকরণ...';
-            publishBtn.disabled = true;
-
-            await setDoc(settingsDoc, { 
-                resultsPublished: newStatus,
-                lastUpdated: new Date().toISOString(),
-                updatedBy: 'admin',
-                totalCandidates: 39
-            }, { merge: true });
-            
-            resultsPublished = newStatus;
-            updateUI();
-            
-            const message = resultsPublished ? 
-                '✅ ফলাফল প্রকাশিত হয়েছে! এখন সবাই ফলাফল দেখতে পারবে।' : 
-                '🔒 ফলাফল গোপন করা হয়েছে! এখন কেউ ফলাফল দেখতে পারবে না।';
-            
-            showNotification(message, "success");
-            await loadResults();
-            
-        } catch (error) {
-            console.error("Toggle error:", error);
-            showNotification('❌ ফলাফল প্রকাশ করতে সমস্যা: ' + error.message, "error");
-        } finally {
-            const publishBtn = document.getElementById('publish-btn');
-            publishBtn.disabled = false;
-            updateUI();
-        }
-    }
-
-    function updateUI() {
-        const messageBox = document.getElementById('message-box');
-        const publishBtn = document.getElementById('publish-btn');
-        const resultsStatus = document.getElementById('results-status');
-        const settingsInfo = document.getElementById('settings-info');
-
-        if (resultsPublished) {
-            messageBox.innerHTML = '<h3>✅ ফলাফল প্রকাশিত হয়েছে</h3><p>এখন সবাই ফলাফল দেখতে পারবে।</p>';
-            messageBox.style.background = '#d4edda';
-            messageBox.style.borderColor = '#c3e6cb';
-            messageBox.style.color = '#155724';
-            publishBtn.textContent = '🙈 ফলাফল গোপন';
-            resultsStatus.textContent = 'প্রকাশিত';
-            settingsInfo.textContent = 'ফলাফল সবাই দেখতে পারবে';
-        } else {
-            messageBox.innerHTML = '<h3>🔒 ভোট গোপন রাখা হয়েছে</h3><p>ফলাফল প্রকাশ না করা পর্যন্ত কেউ ফলাফল দেখতে পারবে না।</p>';
-            messageBox.style.background = '#fff3cd';
-            messageBox.style.borderColor = '#ffeaa7';
-            messageBox.style.color = '#856404';
-            publishBtn.textContent = '📢 ফলাফল প্রকাশ';
-            resultsStatus.textContent = 'গোপন';
-            settingsInfo.textContent = 'ফলাফল গোপন রাখা হয়েছে';
-        }
-    }
-
-    window.loadResults = async function() {
-        try {
-            console.log("Loading results from Firebase...");
-            const querySnapshot = await getDocs(collection(db, "votes"));
-            currentVotes = [];
-            
-            querySnapshot.forEach((doc) => {
-                currentVotes.push({ id: doc.id, ...doc.data() });
-            });
-
-            console.log("Total votes found:", currentVotes.length);
-            updateStatistics(currentVotes);
-            displayVotersList(currentVotes);
-            
-            if (resultsPublished) {
-                displayResults(currentVotes);
-            } else {
-                document.getElementById('results-container').innerHTML = 
-                    '<div class="message-box">🔒 ফলাফল এখনও প্রকাশিত হয়নি। এডমিন ফলাফল প্রকাশ করলে এখানে দেখানো হবে।</div>';
-            }
-            
-        } catch (error) {
-            console.error("Load error:", error);
-            document.getElementById('voters-container').innerHTML = 
-                '<div class="message-box">❌ ডেটা লোড করতে সমস্যা: ' + error.message + '</div>';
-            document.getElementById('results-container').innerHTML = 
-                '<div class="message-box">❌ ফলাফল লোড করতে সমস্যা: ' + error.message + '</div>';
-            updateConnectionStatus(false);
-            showNotification('ডেটা লোড করতে সমস্যা: ' + error.message, "error");
-        }
-    }
-
-    function updateStatistics(votes) {
-        document.getElementById('total-votes').textContent = votes.length;
-
-        if (resultsPublished && votes.length > 0) {
-            const voteCount = {};
-            candidates.forEach(candidate => {
-                voteCount[candidate.name] = 0;
-            });
-
-            votes.forEach(vote => {
-                if (vote.candidate1) voteCount[vote.candidate1]++;
-                if (vote.candidate2) voteCount[vote.candidate2]++;
-            });
-
-            const sortedResults = Object.entries(voteCount).sort(([,a], [,b]) => b - a);
-            const winner = sortedResults[0];
-            
-            document.getElementById('winner-name').textContent = winner[0];
-            document.getElementById('winner-votes').textContent = winner[1] + ' ভোট';
-        } else {
-            document.getElementById('winner-name').textContent = '-';
-            document.getElementById('winner-votes').textContent = '0 ভোট';
-        }
-    }
-
-    function displayVotersList(votes) {
-        const container = document.getElementById('voters-container');
-        const sortedVotes = votes.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        
-        if (sortedVotes.length === 0) {
-            container.innerHTML = '<div class="message-box">📝 এখনও কোন ভোট দেওয়া হয়নি</div>';
-            return;
-        }
-        
-        container.innerHTML = sortedVotes.map(vote => {
-            const time = new Date(vote.timestamp).toLocaleString('bn-BD');
-            return `
-                <div class="voter-item">
-                    <div>
-                        <div style="font-weight: bold; color: #2c3e50;">${vote.voterName || 'Anonymous'}</div>
-                        <div style="color: #7f8c8d; font-size: 0.9em;">
-                            ভোট দেওয়া হয়েছে
-                        </div>
-                    </div>
-                    <div style="color: #95a5a6; font-size: 0.8em; text-align: right;">
-                        <div>${time}</div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    }
-
-    function displayResults(votes) {
-        const container = document.getElementById('results-container');
-        
-        if (!resultsPublished) {
-            container.innerHTML = '<div class="message-box">🔒 ফলাফল এখনও প্রকাশিত হয়নি। এডমিন ফলাফল প্রকাশ করলে এখানে দেখানো হবে।</div>';
-            return;
-        }
-
-        const voteCount = {};
-        candidates.forEach(candidate => {
-            voteCount[candidate.name] = 0;
-        });
-
-        votes.forEach(vote => {
-            if (vote.candidate1) voteCount[vote.candidate1]++;
-            if (vote.candidate2) voteCount[vote.candidate2]++;
-        });
-
-        const sortedResults = Object.entries(voteCount)
-            .sort(([,a], [,b]) => b - a)
-            .filter(([,count]) => count > 0);
-
-        const maxVotes = Math.max(...Object.values(voteCount));
-        
-        if (sortedResults.length === 0) {
-            container.innerHTML = '<div class="message-box">📊 কোন ভোট পাওয়া যায়নি</div>';
-            return;
-        }
-        
-        container.innerHTML = sortedResults.map(([candidateName, count], index) => {
-            const candidate = candidates.find(c => c.name === candidateName);
-            const percentage = maxVotes > 0 ? ((count / maxVotes) * 100).toFixed(1) : 0;
-            const isWinner = index === 0 && count > 0;
-            
-            return `
-                <div class="candidate-card ${isWinner ? 'winner' : ''}">
-                    <div class="candidate-header">
-                        <div class="candidate-marker" style="background: ${candidate?.color || '#666'}">
-                            ${candidate?.marker || '?'}
-                        </div>
-                        <div class="candidate-info">
-                            <div class="candidate-name">${candidateName}</div>
-                            <div style="color: #7f8c8d; font-size: 0.9em;">
-                                মার্কা: ${candidate?.marker || 'N/A'} | ${percentage}%
-                            </div>
-                        </div>
-                        <div class="vote-count">${count}</div>
-                    </div>
-                    ${isWinner ? '<div style="text-align: center; color: #27ae60; font-weight: bold; margin-top: 10px;">🏆 বর্তমান বিজয়ী</div>' : ''}
-                </div>
-            `;
-        }).join('');
-    }
-
-    window.resetAllVotes = async function() {
-        if (!confirm('⚠️ সব ভোট ডিলেট করতে চান?\n\nএটি রিভার্সিবল নয়! সব ভোট চিরতরে মুছে যাবে!')) {
-            return;
-        }
-
-        if (!confirm('❌ আপনি কি নিশ্চিত? এই একশনটি undo করা যাবে না!')) {
-            return;
-        }
-
-        try {
-            const querySnapshot = await getDocs(collection(db, "votes"));
-            const batch = writeBatch(db);
-            
-            let deleteCount = 0;
-            querySnapshot.forEach((doc) => {
-                batch.delete(doc.ref);
-                deleteCount++;
-            });
-            
-            await batch.commit();
-            showNotification(`✅ ${deleteCount} টি ভোট সফলভাবে ডিলেট হয়েছে!`, "success");
-            await loadResults();
-        } catch (error) {
-            console.error("Reset error:", error);
-            showNotification('❌ ভোট ডিলেট করতে সমস্যা: ' + error.message, "error");
-        }
-    }
-
-    window.exportToExcel = async function() {
-        try {
-            const querySnapshot = await getDocs(collection(db, "votes"));
-            const votes = [];
-            
-            querySnapshot.forEach((doc) => {
-                votes.push(doc.data());
-            });
-
-            const voteCount = {};
-            candidates.forEach(candidate => {
-                voteCount[candidate.name] = 0;
-            });
-
-            votes.forEach(vote => {
-                if (vote.candidate1) voteCount[vote.candidate1]++;
-                if (vote.candidate2) voteCount[vote.candidate2]++;
-            });
-
-            let csv = 'প্রার্থীর নাম,মার্কা,ভোট সংখ্যা\n';
-            
-            Object.entries(voteCount).forEach(([candidateName, count]) => {
-                const candidate = candidates.find(c => c.name === candidateName);
-                csv += `"${candidateName}","${candidate?.marker || ''}","${count}"\n`;
-            });
-
-            const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            const url = URL.createObjectURL(blob);
-            link.setAttribute('href', url);
-            link.setAttribute('download', `botany_election_results_${new Date().toISOString().split('T')[0]}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-            
-            showNotification(`✅ ভোট ফলাফল CSV ফাইল হিসেবে ডাউনলোড হয়েছে!`, "success");
-        } catch (error) {
-            console.error("Export error:", error);
-            showNotification('❌ এক্সপোর্ট সমস্যা: ' + error.message, "error");
-        }
-    }
-
-    // ট্যাব স্যুইচ করার ফাংশন - FIXED VERSION
-    window.showTab = function(tabName) {
-        console.log("Switching to tab:", tabName);
-        
-        // প্রথমে সব ট্যাব কন্টেন্ট হাইড করুন
-        document.querySelectorAll('.tab-content').forEach(tab => {
-            tab.classList.remove('active');
-        });
-        
-        // সব ট্যাব বাটন থেকে active ক্লাস রিমুভ করুন
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.classList.remove('active');
-        });
-        
-        // নির্বাচিত ট্যাব কন্টেন্ট দেখান
-        document.getElementById(tabName).classList.add('active');
-        
-        // নির্বাচিত ট্যাব বাটনে active ক্লাস যোগ করুন
-        event.target.classList.add('active');
-        
-        // ট্যাব পরিবর্তন হলে ডেটা রিফ্রেশ করুন
-        if (tabName === 'results-tab') {
-            console.log("Loading results for results tab...");
-            loadResults();
-        }
-    }
-
-    function setupRealtimeListener() {
-        if (unsubscribeVotes) {
-            unsubscribeVotes();
-        }
-        
-        unsubscribeVotes = onSnapshot(collection(db, "votes"), (snapshot) => {
-            console.log("Real-time update received");
-            loadResults();
-            updateConnectionStatus(true);
-        }, (error) => {
-            console.error("Realtime listener error:", error);
-            updateConnectionStatus(false);
-        });
-
-        // Settings এর জন্যেও real-time listener যোগ করা
-        onSnapshot(settingsDoc, (doc) => {
-            if (doc.exists()) {
-                const data = doc.data();
-                resultsPublished = data.resultsPublished || false;
-                console.log("Settings updated, resultsPublished:", resultsPublished);
-                updateUI();
+            setInterval(() => {
                 loadResults();
+            }, 30000);
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            if (unsubscribeVotes) {
+                unsubscribeVotes();
             }
         });
-    }
 
-    // পেইজ লোড হলে ডেটা লোড শুরু করুন
-    document.addEventListener('DOMContentLoaded', function() {
-        console.log("DOM loaded, initializing...");
-        loadInitialData();
-        
-        // অটো রিফ্রেশ (প্রতি 30 সেকেন্ডে)
-        setInterval(() => {
-            if (isConnected) {
-                loadResults();
-            }
-        }, 30000);
-    });
-
-    // পেইজ আনলোড হলে listener বন্ধ করুন
-    window.addEventListener('beforeunload', function() {
-        if (unsubscribeVotes) {
-            unsubscribeVotes();
-        }
-    });
-</script>
+    </script>
 </body>
     </html>
