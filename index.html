@@ -192,9 +192,6 @@
             transform: translateX(5px);
             box-shadow: 0 4px 10px rgba(0,0,0,0.15);
         }
-        .voter-item.voted {
-            border-left-color: #27ae60;
-        }
         .message-box {
             background: #fff3cd;
             border: 1px solid #ffeaa7;
@@ -246,21 +243,6 @@
             text-align: center;
             color: #2980b9;
             font-size: 0.9em;
-        }
-        .voter-badge {
-            display: inline-block;
-            padding: 3px 8px;
-            border-radius: 12px;
-            font-size: 0.8em;
-            margin-left: 8px;
-        }
-        .badge-first {
-            background: #3498db;
-            color: white;
-        }
-        .badge-second {
-            background: #27ae60;
-            color: white;
         }
     </style>
 </head>
@@ -508,7 +490,7 @@
             const settingsInfo = document.getElementById('settings-info');
 
             if (resultsPublished) {
-                messageBox.innerHTML = '<h3>✅ ফলাফল প্রকাশিত হয়েছে</h3><p>এখন সবাই ফলাফল দেখতে পারবে এবং CSV ডাউনলোড করতে পারবেন। CSV তে দেখা যাবে কে কাকে ভোট দিয়েছে।</p>';
+                messageBox.innerHTML = '<h3>✅ ফলাফল প্রকাশিত হয়েছে</h3><p>এখন CSV ডাউনলোড করতে পারবেন। CSV তে দেখা যাবে কে কাকে ভোট দিয়েছে।</p>';
                 messageBox.style.background = '#d4edda';
                 messageBox.style.borderColor = '#c3e6cb';
                 messageBox.style.color = '#155724';
@@ -544,7 +526,7 @@
                 updateExportButtons();
                 
                 const message = resultsPublished ? 
-                    '✅ ফলাফল প্রকাশিত হয়েছে! এখন CSV ডাউনলোড করতে পারবেন (কে কাকে ভোট দিয়েছে)' : 
+                    '✅ ফলাফল প্রকাশিত হয়েছে! এখন CSV ডাউনলোড করতে পারবেন' : 
                     '🔒 ফলাফল গোপন করা হয়েছে! CSV ডাউনলোড বন্ধ করা হয়েছে';
                 
                 showNotification(message, "success");
@@ -654,7 +636,7 @@
                 document.body.removeChild(link);
                 URL.revokeObjectURL(url);
                 
-                showNotification(`✅ ${votes.length} টি ভোটের ডিটেইলস ডাউনলোড হয়েছে! (কে কাকে ভোট দিয়েছে)`, "success");
+                showNotification(`✅ ${votes.length} টি ভোটারের ডিটেইলস ডাউনলোড হয়েছে! (কে কাকে ভোট দিয়েছে)`, "success");
             } catch (error) {
                 showNotification('❌ এক্সপোর্ট সমস্যা: ' + error.message, "error");
             }
@@ -711,7 +693,7 @@
             }
         }
 
-        // Display voters list (showing who they voted for in UI)
+        // Display voters list (ONLY NAMES - no voting info)
         function displayVotersList(votes) {
             const container = document.getElementById('voters-container');
             const sortedVotes = votes.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
@@ -724,26 +706,12 @@
             container.innerHTML = sortedVotes.map(vote => {
                 const time = new Date(vote.timestamp).toLocaleString('bn-BD');
                 
-                // Find candidate markers
-                const candidate1 = candidates.find(c => c.name === vote.candidate1);
-                const candidate2 = candidates.find(c => c.name === vote.candidate2);
-                
                 return `
-                    <div class="voter-item ${resultsPublished ? 'voted' : ''}">
-                        <div style="flex: 1;">
-                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
-                                <span style="font-weight: bold; color: #2c3e50;">${vote.voterName || 'Anonymous'}</span>
-                            </div>
-                            ${resultsPublished ? `
-                                <div style="display: flex; gap: 15px; margin-top: 8px;">
-                                    <div><span style="color: #3498db;">🎯 ১ম:</span> ${vote.candidate1 || 'নেই'} ${candidate1?.marker || ''}</div>
-                                    <div><span style="color: #27ae60;">⭐ ২য়:</span> ${vote.candidate2 || 'নেই'} ${candidate2?.marker || ''}</div>
-                                </div>
-                            ` : ''}
+                    <div class="voter-item">
+                        <div>
+                            <div style="font-weight: bold; color: #2c3e50;">${vote.voterName || 'Anonymous'}</div>
                         </div>
-                        <div style="color: #95a5a6; font-size: 0.8em; text-align: right;">
-                            <div>${time}</div>
-                        </div>
+                        <div style="color: #95a5a6; font-size: 0.8em;">${time}</div>
                     </div>
                 `;
             }).join('');
