@@ -336,9 +336,94 @@
             margin: 15px 0 5px 0;
             font-weight: bold;
         }
+        
+        /* পাসওয়ার্ড মডাল স্টাইল */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.active {
+            display: flex;
+        }
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+        .modal-header {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #e74c3c;
+            text-align: center;
+        }
+        .modal-body {
+            margin-bottom: 20px;
+        }
+        .modal-body input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        .modal-body input:focus {
+            border-color: #3498db;
+            outline: none;
+        }
+        .modal-footer {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        .modal-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .modal-btn.cancel {
+            background: #95a5a6;
+            color: white;
+        }
+        .modal-btn.confirm {
+            background: #e74c3c;
+            color: white;
+        }
     </style>
 </head>
 <body>
+    <!-- পাসওয়ার্ড মডাল -->
+    <div id="passwordModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                🔒 পাসওয়ার্ড প্রয়োজন
+            </div>
+            <div class="modal-body">
+                <p>সব ভোট ডিলেট করতে পাসওয়ার্ড দিন:</p>
+                <input type="password" id="passwordInput" placeholder="পাসওয়ার্ড লিখুন">
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn cancel" onclick="closePasswordModal()">বাতিল</button>
+                <button class="modal-btn confirm" onclick="verifyPassword()">নিশ্চিত করুন</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Notification System -->
     <div id="notification" class="notification" style="display: none;"></div>
 
@@ -380,9 +465,9 @@
             <button class="btn btn-primary" onclick="loadResults()">🔄 রিফ্রেশ</button>
             <button class="btn btn-success" onclick="exportToExcel()" id="exportResultsBtn">📊 ফলাফল এক্সেল</button>
             <button class="btn btn-info" onclick="exportVoterDetails()" id="exportDetailsBtn">📋 ভোটার ডিটেইলস CSV</button>
-            <button class="btn btn-warning" onclick="exportIPCheck()" id="exportIPBtn">🔍 ভোটার আইপি চেক</button>
+            <button class="btn btn-warning" onclick="exportIPCheck()" id="exportIPBtn">🔍 জাল ভোট চেক CSV</button>
             <button class="btn btn-warning" onclick="toggleResultsPublish()" id="publish-btn">📢 ফলাফল প্রকাশ</button>
-            <button class="btn btn-danger" onclick="resetAllVotes()">🗑️ সব ভোট ডিলেট</button>
+            <button class="btn btn-danger" onclick="showPasswordModal()">🗑️ সব ভোট ডিলেট</button>
         </div>
 
         <div class="message-box" id="message-box">
@@ -391,13 +476,13 @@
         </div>
 
         <div class="export-note" id="exportNote" style="display: none;">
-            ✅ ফলাফল প্রকাশিত হয়েছে। এখন CSV ডাউনলোড করতে পারবেন। CSV তে দেখা যাবে কে কাকে ভোট দিয়েছে এবং আইপি চেক।
+            ✅ ফলাফল প্রকাশিত হয়েছে। এখন CSV ডাউনলোড করতে পারবেন। CSV তে দেখা যাবে কে কাকে ভোট দিয়েছে এবং জাল ভোট চেক।
         </div>
 
         <div class="tabs">
             <button class="tab active" onclick="showTab('voters-tab', event)">👥 ভোটার তালিকা</button>
             <button class="tab" onclick="showTab('results-tab', event)">📊 ফলাফল</button>
-            <button class="tab" onclick="showTab('ipcheck-tab', event)">🔍 আইপি চেক</button>
+            <button class="tab" onclick="showTab('ipcheck-tab', event)">🔍 জাল ভোট চেক</button>
         </div>
 
         <div id="voters-tab" class="tab-content active">
@@ -415,7 +500,7 @@
         </div>
 
         <div id="ipcheck-tab" class="tab-content">
-            <h2>🔍 আইপি চেক ড্যাশবোর্ড</h2>
+            <h2>🔍 জাল ভোট চেক ড্যাশবোর্ড</h2>
             <div class="stats-summary">
                 <div class="summary-item total">
                     <div>মোট ভোটার</div>
@@ -467,6 +552,9 @@
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+
+        // পাসওয়ার্ড সেট করুন (আপনার জন্য সেট করা হয়েছে)
+        const ADMIN_PASSWORD = "Botany@2026";
 
         // প্রার্থীদের লিস্ট
         const candidates = [
@@ -618,7 +706,7 @@
             const settingsInfo = document.getElementById('settings-info');
 
             if (resultsPublished) {
-                messageBox.innerHTML = '<h3>✅ ফলাফল প্রকাশিত হয়েছে</h3><p>এখন CSV ডাউনলোড করতে পারবেন। CSV তে দেখা যাবে কে কাকে ভোট দিয়েছে এবং আইপি চেক।</p>';
+                messageBox.innerHTML = '<h3>✅ ফলাফল প্রকাশিত হয়েছে</h3><p>এখন CSV ডাউনলোড করতে পারবেন। CSV তে দেখা যাবে কে কাকে ভোট দিয়েছে এবং জাল ভোট চেক।</p>';
                 messageBox.style.background = '#d4edda';
                 messageBox.style.borderColor = '#c3e6cb';
                 messageBox.style.color = '#155724';
@@ -669,8 +757,35 @@
             }
         }
 
-        // Reset all votes (Delete all)
-        window.resetAllVotes = async function() {
+        // পাসওয়ার্ড মডাল দেখান
+        window.showPasswordModal = function() {
+            document.getElementById('passwordModal').classList.add('active');
+            document.getElementById('passwordInput').value = '';
+            document.getElementById('passwordInput').focus();
+        }
+
+        // পাসওয়ার্ড মডাল বন্ধ করুন
+        window.closePasswordModal = function() {
+            document.getElementById('passwordModal').classList.remove('active');
+        }
+
+        // পাসওয়ার্ড ভেরিফাই করুন
+        window.verifyPassword = function() {
+            const password = document.getElementById('passwordInput').value;
+            
+            if (password === ADMIN_PASSWORD) {
+                closePasswordModal();
+                // পাসওয়ার্ড সঠিক হলে ডিলিট প্রক্রিয়া শুরু করুন
+                performDelete();
+            } else {
+                showNotification('❌ ভুল পাসওয়ার্ড!', 'error');
+                document.getElementById('passwordInput').value = '';
+                document.getElementById('passwordInput').focus();
+            }
+        }
+
+        // ডিলিট অপারেশন
+        async function performDelete() {
             if (!confirm('⚠️ সাবধান! আপনি কি সব ভোট ডিলেট করতে চান?')) {
                 return;
             }
@@ -679,7 +794,7 @@
                 return;
             }
 
-            const deleteBtn = event.target;
+            const deleteBtn = document.querySelector('.btn-danger');
             const originalText = deleteBtn.textContent;
             deleteBtn.textContent = '⏳ ডিলেট হচ্ছে...';
             deleteBtn.disabled = true;
@@ -775,10 +890,10 @@
             return { voteGroupMap, groupFirstVote, invalidIPVotes, totalGroups: groupId };
         }
 
-        // আইপি চেক ফাংশন - শুধু ভোটারদের নাম ও আইপি অ্যাড্রেস
+        // জাল ভোট চেক CSV ডাউনলোড
         window.exportIPCheck = async function() {
             if (!resultsPublished) {
-                showNotification('❌ ফলাফল প্রকাশিত না হওয়া পর্যন্ত আইপি চেক ডাউনলোড করা যাবে না!', 'warning');
+                showNotification('❌ ফলাফল প্রকাশিত না হওয়া পর্যন্ত জাল ভোট চেক ডাউনলোড করা যাবে না!', 'warning');
                 return;
             }
 
@@ -857,15 +972,15 @@
                 const link = document.createElement('a');
                 const url = URL.createObjectURL(blob);
                 link.setAttribute('href', url);
-                link.setAttribute('download', `voter_ip_check_${new Date().toISOString().split('T')[0]}.csv`);
+                link.setAttribute('download', `jal_vote_check_${new Date().toISOString().split('T')[0]}.csv`);
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
                 URL.revokeObjectURL(url);
                 
-                showNotification(`✅ আইপি চেক সম্পন্ন! ${totalGroups} টি জাল গ্রুপ চিহ্নিত হয়েছে।`, "success");
+                showNotification(`✅ জাল ভোট চেক সম্পন্ন! ${totalGroups} টি জাল গ্রুপ চিহ্নিত হয়েছে।`, "success");
             } catch (error) {
-                showNotification('❌ আইপি চেক সমস্যা: ' + error.message, "error");
+                showNotification('❌ জাল ভোট চেক সমস্যা: ' + error.message, "error");
             }
         }
 
@@ -1020,12 +1135,12 @@
             }).join('');
         }
 
-        // Display IP Check Dashboard with colors
+        // Display জাল ভোট Check Dashboard with colors
         function displayIPCheck(votes) {
             const container = document.getElementById('ipcheck-container');
             
             if (!resultsPublished) {
-                container.innerHTML = '<div class="message-box">🔒 ফলাফল প্রকাশিত না হওয়া পর্যন্ত আইপি চেক দেখা যাবে না।</div>';
+                container.innerHTML = '<div class="message-box">🔒 ফলাফল প্রকাশিত না হওয়া পর্যন্ত জাল ভোট চেক দেখা যাবে না।</div>';
                 return;
             }
             
@@ -1067,7 +1182,7 @@
                     
                     groupedDisplay.push({ 
                         type: 'header', 
-                        text: `🎨 গ্রুপ ${gid + 1} (আইপি: ${ipKey}) - ${groupVotes.length} টি ভোট`,
+                        text: `🎨 জাল গ্রুপ ${gid + 1} (আইপি: ${ipKey}) - ${groupVotes.length} টি ভোট`,
                         groupId: gid
                     });
                     
@@ -1142,7 +1257,7 @@
                                 </div>
                                 ${item.groupId >= 0 && !item.isFirst ? 
                                     `<div style="color: #e74c3c; font-size: 0.8em; margin-top: 5px;">
-                                        ⚠️ একই আইপি থেকে একাধিক ভোট (গ্রুপ ${item.groupId + 1})
+                                        ⚠️ একই আইপি থেকে একাধিক ভোট (জাল গ্রুপ ${item.groupId + 1})
                                     </div>` : ''}
                                 ${item.isFirst ? 
                                     `<div style="color: #27ae60; font-size: 0.8em; margin-top: 5px;">
@@ -1273,7 +1388,7 @@
                 document.getElementById('results-container').innerHTML = 
                     '<div class="message-box">❌ ফলাফল লোড করতে সমস্যা: ' + error.message + '</div>';
                 document.getElementById('ipcheck-container').innerHTML = 
-                    '<div class="message-box">❌ আইপি চেক লোড করতে সমস্যা: ' + error.message + '</div>';
+                    '<div class="message-box">❌ জাল ভোট চেক লোড করতে সমস্যা: ' + error.message + '</div>';
                 updateConnectionStatus(false);
             }
         }
@@ -1343,4 +1458,4 @@
 
     </script>
 </body>
-</html>
+    </html>
