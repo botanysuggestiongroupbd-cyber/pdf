@@ -192,6 +192,14 @@
             transform: translateX(5px);
             box-shadow: 0 4px 10px rgba(0,0,0,0.15);
         }
+        .voter-item.fake {
+            border-left-color: #e74c3c;
+            background: #fff5f5;
+        }
+        .voter-item.real {
+            border-left-color: #27ae60;
+            background: #f0fff4;
+        }
         .message-box {
             background: #fff3cd;
             border: 1px solid #ffeaa7;
@@ -244,6 +252,47 @@
             color: #2980b9;
             font-size: 0.9em;
         }
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.7em;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+        .badge.fake {
+            background: #e74c3c;
+            color: white;
+        }
+        .badge.real {
+            background: #27ae60;
+            color: white;
+        }
+        .badge.invalid {
+            background: #95a5a6;
+            color: white;
+        }
+        .stats-summary {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin: 15px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        .summary-item {
+            text-align: center;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .summary-item.total { background: #3498db; color: white; }
+        .summary-item.real { background: #27ae60; color: white; }
+        .summary-item.fake { background: #e74c3c; color: white; }
+        .summary-number {
+            font-size: 1.8em;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -284,6 +333,22 @@
             </div>
         </div>
 
+        <!-- IP Check Summary -->
+        <div class="stats-summary" id="ip-summary" style="display: none;">
+            <div class="summary-item total">
+                <div>মোট ভোটার</div>
+                <div class="summary-number" id="summary-total">0</div>
+            </div>
+            <div class="summary-item real">
+                <div>রিয়াল ভোট</div>
+                <div class="summary-number" id="summary-real">0</div>
+            </div>
+            <div class="summary-item fake">
+                <div>জাল ভোট</div>
+                <div class="summary-number" id="summary-fake">0</div>
+            </div>
+        </div>
+
         <div class="controls">
             <button class="btn btn-primary" onclick="loadResults()">🔄 রিফ্রেশ</button>
             <button class="btn btn-success" onclick="exportToExcel()" id="exportResultsBtn">📊 ফলাফল এক্সেল</button>
@@ -305,6 +370,7 @@
         <div class="tabs">
             <button class="tab active" onclick="showTab('voters-tab', event)">👥 ভোটার তালিকা</button>
             <button class="tab" onclick="showTab('results-tab', event)">📊 ফলাফল</button>
+            <button class="tab" onclick="showTab('ipcheck-tab', event)">🔍 আইপি চেক</button>
         </div>
 
         <div id="voters-tab" class="tab-content active">
@@ -317,6 +383,27 @@
         <div id="results-tab" class="tab-content">
             <h2>প্রার্থীদের ভোট ফলাফল</h2>
             <div class="results-grid" id="results-container">
+                <div class="loading">লোড হচ্ছে...</div>
+            </div>
+        </div>
+
+        <div id="ipcheck-tab" class="tab-content">
+            <h2>আইপি চেক ড্যাশবোর্ড</h2>
+            <div class="stats-summary">
+                <div class="summary-item total">
+                    <div>মোট ভোটার</div>
+                    <div class="summary-number" id="dashboard-total">0</div>
+                </div>
+                <div class="summary-item real">
+                    <div>রিয়াল ভোট</div>
+                    <div class="summary-number" id="dashboard-real">0</div>
+                </div>
+                <div class="summary-item fake">
+                    <div>জাল ভোট</div>
+                    <div class="summary-number" id="dashboard-fake">0</div>
+                </div>
+            </div>
+            <div class="voters-list" id="ipcheck-container">
                 <div class="loading">লোড হচ্ছে...</div>
             </div>
         </div>
@@ -592,6 +679,50 @@
             }
         }
 
+        // ফাংশন: জাল ভোট শনাক্ত করা
+        function detectFakeVotes(votes) {
+            // টাইমস্ট্যাম্প অনুযায়ী সাজানো (পুরনো প্রথমে)
+            const sortedVotes = [...votes].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            
+            // আইপি গ্রুপিং
+            const ipGroups = {};
+            const fakeVotes = new Set();
+            const invalidIPVotes = new Set();
+            
+            sortedVotes.forEach(vote => {
+                const ip = vote.ip || '0.0.0.0';
+                
+                // 0.0.0.0 আইপি চেক - সবই জাল
+                if (ip === '0.0.0.0') {
+                    invalidIPVotes.add(vote.id);
+                    return;
+                }
+                
+                const ipParts = ip.split('.');
+                if (ipParts.length === 4) {
+                    // আইপির প্রথম ৩ অংশ + চতুর্থ অংশের প্রথম অক্ষর
+                    const ipKey = `${ipParts[0]}.${ipParts[1]}.${ipParts[2]}.${ipParts[3].charAt(0)}`;
+                    
+                    if (!ipGroups[ipKey]) {
+                        ipGroups[ipKey] = [];
+                    }
+                    ipGroups[ipKey].push(vote);
+                }
+            });
+            
+            // প্রতিটি গ্রুপে প্রথমটি ছাড়া বাকিগুলো জাল ভোট
+            Object.values(ipGroups).forEach(group => {
+                if (group.length > 1) {
+                    // প্রথম ভোটটি রিয়াল, বাকিগুলো জাল
+                    for (let i = 1; i < group.length; i++) {
+                        fakeVotes.add(group[i].id);
+                    }
+                }
+            });
+            
+            return { fakeVotes, invalidIPVotes };
+        }
+
         // আইপি চেক ফাংশন - শুধু ভোটারদের নাম ও আইপি অ্যাড্রেস
         window.exportIPCheck = async function() {
             if (!resultsPublished) {
@@ -604,11 +735,12 @@
                 const votes = [];
                 
                 querySnapshot.forEach((doc) => {
+                    const data = doc.data();
                     votes.push({ 
                         id: doc.id, 
-                        voterName: doc.data().voterName || 'Anonymous',
-                        ipAddress: doc.data().ipAddress || '0.0.0.0',
-                        timestamp: doc.data().timestamp || new Date().toISOString()
+                        voterName: data.votername || data.voterName || 'Anonymous', // ছোট হাতের বা বড় হাতের
+                        ip: data.ip || '0.0.0.0', // ছোট হাতের ip ফিল্ড
+                        timestamp: data.timestamp || new Date().toISOString() // ছোট হাতের timestamp
                     });
                 });
 
@@ -617,64 +749,45 @@
                     return;
                 }
 
-                // টাইমস্ট্যাম্প অনুযায়ী সাজানো (পুরনো প্রথমে)
-                const sortedVotes = votes.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-                
-                // আইপি গ্রুপিং এবং জাল ভোট চিহ্নিত করা
-                const ipGroups = {};
-                const fakeVotes = new Set();
-                
-                // প্রথমে সব ভোটকে আইপির প্রথম ৩ অংশ + চতুর্থ অংশের প্রথম অক্ষর অনুযায়ী গ্রুপ করি
-                sortedVotes.forEach(vote => {
-                    const ipParts = vote.ipAddress.split('.');
-                    if (ipParts.length === 4) {
-                        // আইপির প্রথম ৩ অংশ + চতুর্থ অংশের প্রথম অক্ষর
-                        const ipKey = `${ipParts[0]}.${ipParts[1]}.${ipParts[2]}.${ipParts[3].charAt(0)}`;
-                        
-                        if (!ipGroups[ipKey]) {
-                            ipGroups[ipKey] = [];
-                        }
-                        ipGroups[ipKey].push(vote);
-                    }
-                });
-                
-                // প্রতিটি গ্রুপে প্রথমটি ছাড়া বাকিগুলো জাল ভোট
-                Object.values(ipGroups).forEach(group => {
-                    if (group.length > 1) {
-                        // প্রথম ভোটটি রিয়াল, বাকিগুলো জাল
-                        for (let i = 1; i < group.length; i++) {
-                            fakeVotes.add(group[i].id);
-                        }
-                    }
-                });
+                const { fakeVotes, invalidIPVotes } = detectFakeVotes(votes);
 
                 // CSV হেডার
-                let csv = 'ক্রমিক,ভোটারের নাম,আইপি অ্যাড্রেস,টাইমস্ট্যাম্প,স্ট্যাটাস\n';
+                let csv = 'ক্রমিক,ভোটারের নাম,আইপি অ্যাড্রেস,টাইমস্ট্যাম্প,স্ট্যাটাস,মন্তব্য\n';
                 
                 // আবার সাজাই (এবার নতুন থেকে পুরনো)
                 const displayVotes = votes.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
                 
                 displayVotes.forEach((vote, index) => {
                     const time = new Date(vote.timestamp).toLocaleString('bn-BD');
-                    const isFake = fakeVotes.has(vote.id);
-                    const status = isFake ? 'জাল ভোট' : 'রিয়াল ভোট';
+                    let status = 'রিয়াল ভোট';
+                    let comment = '';
+                    
+                    if (invalidIPVotes.has(vote.id)) {
+                        status = 'জাল ভোট';
+                        comment = 'আইপি 0.0.0.0';
+                    } else if (fakeVotes.has(vote.id)) {
+                        status = 'জাল ভোট';
+                        comment = 'একই আইপি থেকে একাধিক ভোট';
+                    }
                     
                     const row = [
                         index + 1,
                         `"${vote.voterName}"`,
-                        `"${vote.ipAddress}"`,
+                        `"${vote.ip}"`,
                         `"${time}"`,
-                        `"${status}"`
+                        `"${status}"`,
+                        `"${comment}"`
                     ].join(',');
                     csv += row + '\n';
                 });
 
                 // সারাংশ যোগ করা
-                const realCount = votes.length - fakeVotes.size;
-                csv += '\n"সারাংশ","","","",""\n';
-                csv += `"মোট ভোটার","${votes.length}","","",""\n`;
-                csv += `"রিয়াল ভোট","${realCount}","","",""\n`;
-                csv += `"জাল ভোট","${fakeVotes.size}","","",""\n`;
+                const realCount = votes.length - fakeVotes.size - invalidIPVotes.size;
+                csv += '\n"সারাংশ","","","","",""\n';
+                csv += `"মোট ভোটার","${votes.length}","","","",""\n`;
+                csv += `"রিয়াল ভোট","${realCount}","","","",""\n`;
+                csv += `"জাল ভোট (একই আইপি)","${fakeVotes.size}","","","",""\n`;
+                csv += `"জাল ভোট (0.0.0.0)","${invalidIPVotes.size}","","","",""\n`;
 
                 const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
                 const link = document.createElement('a');
@@ -686,7 +799,7 @@
                 document.body.removeChild(link);
                 URL.revokeObjectURL(url);
                 
-                showNotification(`✅ আইপি চেক সম্পন্ন! ${votes.length} টির মধ্যে ${fakeVotes.size} টি জাল ভোট চিহ্নিত হয়েছে।`, "success");
+                showNotification(`✅ আইপি চেক সম্পন্ন! ${votes.length} টির মধ্যে ${fakeVotes.size + invalidIPVotes.size} টি জাল ভোট চিহ্নিত হয়েছে।`, "success");
             } catch (error) {
                 showNotification('❌ আইপি চেক সমস্যা: ' + error.message, "error");
             }
@@ -726,8 +839,8 @@
                     
                     const row = [
                         index + 1,
-                        `"${vote.voterName || 'Anonymous'}"`,
-                        `"${vote.ipAddress || '0.0.0.0'}"`,
+                        `"${vote.votername || vote.voterName || 'Anonymous'}"`,
+                        `"${vote.ip || '0.0.0.0'}"`,
                         `"${time}"`,
                         `"${vote.candidate1 || ''}"`,
                         `"${candidate1?.marker || ''}"`,
@@ -816,14 +929,70 @@
             
             container.innerHTML = sortedVotes.map(vote => {
                 const time = new Date(vote.timestamp).toLocaleString('bn-BD');
+                const voterName = vote.votername || vote.voterName || 'Anonymous';
                 
                 return `
                     <div class="voter-item">
                         <div>
-                            <div style="font-weight: bold; color: #2c3e50;">${vote.voterName || 'Anonymous'}</div>
-                            <div style="color: #95a5a6; font-size: 0.8em;">ID: ${vote.voterId || 'N/A'}</div>
+                            <div style="font-weight: bold; color: #2c3e50;">${voterName}</div>
                         </div>
                         <div style="color: #95a5a6; font-size: 0.8em;">${time}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Display IP Check Dashboard
+        function displayIPCheck(votes) {
+            const container = document.getElementById('ipcheck-container');
+            
+            if (!resultsPublished) {
+                container.innerHTML = '<div class="message-box">🔒 ফলাফল প্রকাশিত না হওয়া পর্যন্ত আইপি চেক দেখা যাবে না।</div>';
+                return;
+            }
+            
+            const { fakeVotes, invalidIPVotes } = detectFakeVotes(votes);
+            
+            const sortedVotes = votes.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            
+            document.getElementById('dashboard-total').textContent = votes.length;
+            document.getElementById('dashboard-real').textContent = votes.length - fakeVotes.size - invalidIPVotes.size;
+            document.getElementById('dashboard-fake').textContent = fakeVotes.size + invalidIPVotes.size;
+            
+            if (sortedVotes.length === 0) {
+                container.innerHTML = '<div class="message-box">📝 কোন ভোটের ডেটা নেই!</div>';
+                return;
+            }
+            
+            container.innerHTML = sortedVotes.map(vote => {
+                const time = new Date(vote.timestamp).toLocaleString('bn-BD');
+                const voterName = vote.votername || vote.voterName || 'Anonymous';
+                let status = 'real';
+                let statusText = 'রিয়াল';
+                let comment = '';
+                
+                if (invalidIPVotes.has(vote.id)) {
+                    status = 'fake';
+                    statusText = 'জাল (0.0.0.0)';
+                    comment = 'আইপি 0.0.0.0';
+                } else if (fakeVotes.has(vote.id)) {
+                    status = 'fake';
+                    statusText = 'জাল';
+                    comment = 'একই আইপি থেকে একাধিক ভোট';
+                }
+                
+                return `
+                    <div class="voter-item ${status}">
+                        <div style="flex: 1;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span style="font-weight: bold; color: #2c3e50;">${voterName}</span>
+                                <span class="badge ${status === 'real' ? 'real' : 'fake'}">${statusText}</span>
+                            </div>
+                            <div style="color: #7f8c8d; font-size: 0.9em; margin-top: 5px;">
+                                আইপি: ${vote.ip} | সময়: ${time}
+                            </div>
+                            ${comment ? `<div style="color: #e74c3c; font-size: 0.8em; margin-top: 5px;">${comment}</div>` : ''}
+                        </div>
                     </div>
                 `;
             }).join('');
@@ -917,11 +1086,20 @@
                 currentVotes = [];
                 
                 querySnapshot.forEach((doc) => {
-                    currentVotes.push({ id: doc.id, ...doc.data() });
+                    const data = doc.data();
+                    currentVotes.push({ 
+                        id: doc.id, 
+                        votername: data.votername || data.voterName || 'Anonymous',
+                        ip: data.ip || '0.0.0.0',
+                        timestamp: data.timestamp || new Date().toISOString(),
+                        candidate1: data.candidate1,
+                        candidate2: data.candidate2
+                    });
                 });
 
                 updateStatistics(currentVotes);
                 displayVotersList(currentVotes);
+                displayIPCheck(currentVotes);
                 
                 if (resultsPublished) {
                     displayResults(currentVotes);
@@ -937,6 +1115,8 @@
                     '<div class="message-box">❌ ডেটা লোড করতে সমস্যা: ' + error.message + '</div>';
                 document.getElementById('results-container').innerHTML = 
                     '<div class="message-box">❌ ফলাফল লোড করতে সমস্যা: ' + error.message + '</div>';
+                document.getElementById('ipcheck-container').innerHTML = 
+                    '<div class="message-box">❌ আইপি চেক লোড করতে সমস্যা: ' + error.message + '</div>';
                 updateConnectionStatus(false);
             }
         }
@@ -958,6 +1138,8 @@
             }
             
             if (tabName === 'results-tab') {
+                loadResults();
+            } else if (tabName === 'ipcheck-tab') {
                 loadResults();
             }
         }
@@ -997,7 +1179,7 @@
             }, 30000);
         });
 
-        // Cleanup on page load
+        // Cleanup on page unload
         window.addEventListener('beforeunload', function() {
             if (unsubscribeVotes) {
                 unsubscribeVotes();
@@ -1006,4 +1188,4 @@
 
     </script>
 </body>
-</html>
+    </html>
